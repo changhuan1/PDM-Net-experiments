@@ -106,6 +106,26 @@ def split_predefined_folders(source: Path) -> tuple[list[ImageRecord], list[Imag
     return train_records, val_records, test_records, class_names
 
 
+def holdout_validation(
+    records: list[ImageRecord],
+    class_names: list[str],
+    val_ratio: float,
+    seed: int,
+) -> tuple[list[ImageRecord], list[ImageRecord]]:
+    rng = random.Random(seed)
+    train_records: list[ImageRecord] = []
+    val_records: list[ImageRecord] = []
+    for class_name in class_names:
+        class_records = [r for r in records if r.class_name == class_name]
+        rng.shuffle(class_records)
+        n_val = max(1, int(round(len(class_records) * val_ratio))) if len(class_records) >= 3 else 0
+        val_records.extend(class_records[:n_val])
+        train_records.extend(class_records[n_val:])
+    rng.shuffle(train_records)
+    rng.shuffle(val_records)
+    return train_records, val_records
+
+
 def sample_shot(records: list[ImageRecord], class_names: list[str], shot: int | str, seed: int) -> list[ImageRecord]:
     if str(shot).lower() == "full":
         return records
@@ -152,6 +172,8 @@ def make_fewshot_splits(
     for seed in seeds:
         if predefined:
             train_pool, val_records, test_records, class_names = split_predefined_folders(source)
+            if not val_records:
+                train_pool, val_records = holdout_validation(train_pool, class_names, val_ratio, seed)
         else:
             train_pool, val_records, test_records, class_names = split_direct_class_folders(
                 source, val_ratio=val_ratio, test_ratio=test_ratio, seed=seed
