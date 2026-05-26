@@ -10,6 +10,16 @@ import pandas as pd
 from .facial_dataset import IMAGE_EXTENSIONS
 
 
+CLASS_ALIASES = {
+    "angry": ["anger"],
+    "anger": ["angry"],
+    "happy": ["happiness"],
+    "happiness": ["happy"],
+    "sad": ["sadness"],
+    "sadness": ["sad"],
+}
+
+
 @dataclass(frozen=True)
 class ImageRecord:
     path: Path
@@ -36,6 +46,12 @@ def records_from_class_dir(root: Path, class_to_idx: dict[str, int]) -> list[Ima
     records: list[ImageRecord] = []
     for class_name, label in class_to_idx.items():
         class_dir = root / class_name
+        if not class_dir.exists():
+            for alias in CLASS_ALIASES.get(class_name, []):
+                alias_dir = root / alias
+                if alias_dir.exists():
+                    class_dir = alias_dir
+                    break
         if not class_dir.exists():
             continue
         images = sorted(
