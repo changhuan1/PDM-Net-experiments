@@ -1,0 +1,32 @@
+dataset:
+  image_size: 224
+  num_workers: 4
+  class_names: []
+training:
+  epochs: 50
+  batch_size: 32
+  learning_rate: 0.0003
+  weight_decay: 0.0001
+  optimizer: adamw
+  scheduler: cosine
+  seed: 0
+  amp: true
+model:
+  name: pdmnet
+  backbone: resnet18
+  pretrained: true
+  feature_dim: 512
+  temperature: 0.1
+  fusion_alpha: 0.0
+  mask_scale: 5.0
+  use_gt_mask_train: false
+  use_prototype_mask: false
+  use_prototype_classifier: false
+  class_agnostic_attention: false
+loss:
+  lambda_mask: 0.0
+  lambda_consistency: 0.0
+  use_fused_ce: false
+output:
+  root: outputs
+  run_name: pdmnet_global_branch_only

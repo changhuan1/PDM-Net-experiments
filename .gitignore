@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local data and experiment outputs
+data/raw/
+data/splits/
+outputs/
+runs/
+wandb/
+
+# Model artifacts
+*.pt
+*.pth
+*.ckpt
+*.onnx
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
