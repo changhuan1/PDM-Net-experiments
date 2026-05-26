@@ -7,8 +7,6 @@ from pathlib import Path
 
 import pandas as pd
 
-from .facial_dataset import IMAGE_EXTENSIONS
-
 
 CLASS_ALIASES = {
     "angry": ["anger"],
@@ -18,6 +16,7 @@ CLASS_ALIASES = {
     "sad": ["sadness"],
     "sadness": ["sad"],
 }
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
 
 @dataclass(frozen=True)
