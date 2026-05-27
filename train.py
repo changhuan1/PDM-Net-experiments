@@ -178,6 +178,10 @@ def main() -> None:
     run_name = cfg.get("output", {}).get("run_name") or default_run
     if run_name == "pdmnet_run":
         run_name = default_run
+    elif "{split}" in run_name:
+        run_name = run_name.format(split=split_name, model=model_name)
+    elif not run_name.endswith(split_name):
+        run_name = f"{run_name}_{split_name}"
     output_root = Path(cfg.get("output", {}).get("root", "outputs"))
     output_dir = args.output_dir or (output_root / run_name)
     output_dir.mkdir(parents=True, exist_ok=True)
