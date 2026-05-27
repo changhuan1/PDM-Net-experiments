@@ -65,13 +65,46 @@ class FacialAffectDataset(Dataset):
         ]
         self.class_names = self._infer_class_names(self.samples)
 
+    def _candidate_roots(self) -> list[Path]:
+        roots = [self.root, Path.cwd()]
+        roots.extend(self.csv_path.resolve().parents)
+        unique: list[Path] = []
+        seen = set()
+        for root in roots:
+            resolved = root.resolve()
+            if resolved not in seen:
+                unique.append(resolved)
+                seen.add(resolved)
+        return unique
+
+    def _resolve_portable_data_path(self, value: str) -> Path | None:
+        normalized = value.replace("\\", "/")
+        for marker in ("data/raw/", "data/splits/"):
+            if marker in normalized:
+                suffix = normalized[normalized.index(marker) :]
+                for root in self._candidate_roots():
+                    candidate = root / suffix
+                    if candidate.exists():
+                        return candidate.resolve()
+        return None
+
     def _resolve_path(self, value: str) -> Path:
+        portable = self._resolve_portable_data_path(value)
+        if portable is not None:
+            return portable
+
         path = Path(value)
-        if path.is_absolute():
+        if path.is_absolute() and path.exists():
             return path
+
         candidate = (self.root / path).resolve()
         if candidate.exists():
             return candidate
+
+        candidate = (Path.cwd() / path).resolve()
+        if candidate.exists():
+            return candidate
+
         return path.resolve()
 
     @staticmethod

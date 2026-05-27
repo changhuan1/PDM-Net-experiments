@@ -26,6 +26,16 @@ class ImageRecord:
     label: int
 
 
+def portable_path(path: Path) -> str:
+    resolved = path.resolve()
+    for root in [Path.cwd().resolve(), *Path.cwd().resolve().parents]:
+        try:
+            return resolved.relative_to(root).as_posix()
+        except ValueError:
+            continue
+    return str(resolved)
+
+
 def list_class_images(root: Path) -> tuple[list[str], dict[str, list[Path]]]:
     class_dirs = [p for p in root.iterdir() if p.is_dir() and not p.name.startswith(".")]
     class_names = sorted(p.name for p in class_dirs)
@@ -144,7 +154,7 @@ def sample_shot(records: list[ImageRecord], class_names: list[str], shot: int | 
 def write_records(records: list[ImageRecord], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     df = pd.DataFrame(
-        [{"path": str(r.path), "label": r.label, "class_name": r.class_name} for r in records]
+        [{"path": portable_path(r.path), "label": r.label, "class_name": r.class_name} for r in records]
         if records
         else [],
         columns=["path", "label", "class_name"],
