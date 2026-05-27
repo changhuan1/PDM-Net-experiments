@@ -1,0 +1,28 @@
+dataset:
+  image_size: 224
+  num_workers: 8
+  class_names: []
+
+training:
+  epochs: 80
+  batch_size: 64
+  learning_rate: 0.0001
+  weight_decay: 0.001
+  optimizer: adamw
+  scheduler: cosine
+  seed: 0
+  amp: true
+  freeze_backbone: false
+
+model:
+  name: resnet50
+  backbone: resnet50
+  pretrained: true
+  dropout: 0.35
+
+loss:
+  label_smoothing: 0.1
+
+output:
+  root: outputs
+  run_name: resnet50_strong

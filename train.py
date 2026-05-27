@@ -64,6 +64,17 @@ def make_loader(csv_path: Path, image_size: int, batch_size: int, num_workers: i
     )
 
 
+def freeze_backbone_if_requested(model: torch.nn.Module, cfg: dict) -> None:
+    if not bool(cfg.get("training", {}).get("freeze_backbone", False)):
+        return
+    backbone = getattr(model, "backbone", None)
+    if backbone is None:
+        return
+    for parameter in backbone.parameters():
+        parameter.requires_grad = False
+    print("Backbone frozen: training classifier/prototype layers only.")
+
+
 @torch.no_grad()
 def evaluate(model: torch.nn.Module, loader: DataLoader, device: torch.device) -> dict[str, float]:
     model.eval()
@@ -96,7 +107,7 @@ def train_one_epoch(
         images = batch["image"].to(device, non_blocking=True)
         labels = batch["label"].to(device, non_blocking=True)
         optimizer.zero_grad(set_to_none=True)
-        with torch.cuda.amp.autocast(enabled=amp):
+        with torch.amp.autocast(device_type=device.type, enabled=amp):
             outputs = model(images, labels)
             loss, logs = compute_loss(outputs, labels, loss_cfg)
         scaler.scale(loss).backward()
@@ -147,6 +158,7 @@ def main() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_name = cfg["model"].get("name", "pdmnet")
     model = create_model(model_name, num_classes=num_classes, cfg=cfg["model"]).to(device)
+    freeze_backbone_if_requested(model, cfg)
 
     optimizer_name = cfg["training"].get("optimizer", "adamw").lower()
     lr = float(cfg["training"].get("learning_rate", 3e-4))
@@ -159,7 +171,7 @@ def main() -> None:
     epochs = int(cfg["training"].get("epochs", 50))
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(epochs, 1))
     amp = bool(cfg["training"].get("amp", True)) and device.type == "cuda"
-    scaler = torch.cuda.amp.GradScaler(enabled=amp)
+    scaler = torch.amp.GradScaler("cuda", enabled=amp)
 
     split_name = split_dir.name
     default_run = f"{model_name}_{split_name}"

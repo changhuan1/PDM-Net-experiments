@@ -57,6 +57,19 @@ Ablation configs are available under `configs/ablations/`, for example:
 python train.py --config configs/ablations/class_agnostic_attention.yaml --split data/splits/<dataset_name>/20shot_seed0
 ```
 
+For stronger numbers, especially in the paper tables, prefer the ResNet50 configs:
+
+```bash
+# Low-shot friendly: freezes the ImageNet backbone and trains only task heads.
+python train.py --config configs/pdmnet_resnet50_frozen.yaml --split data/splits/<dataset_name>/5shot_seed0
+
+# Stronger 50-shot/full-data fine-tuning.
+python train.py --config configs/pdmnet_resnet50_strong.yaml --split data/splits/<dataset_name>/50shot_seed0
+
+# Strong baseline for fair comparison.
+python train.py --config configs/resnet50_strong.yaml --split data/splits/<dataset_name>/50shot_seed0
+```
+
 ## 4. Test and visualize
 
 ```bash

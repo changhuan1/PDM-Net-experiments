@@ -16,16 +16,17 @@ def symmetric_kl(logits_a: torch.Tensor, logits_b: torch.Tensor) -> torch.Tensor
 
 
 def compute_loss(outputs: dict[str, torch.Tensor], labels: torch.Tensor, cfg: dict) -> tuple[torch.Tensor, dict[str, float]]:
+    label_smoothing = float(cfg.get("label_smoothing", 0.0))
     if "logits_p" not in outputs:
-        loss = F.cross_entropy(outputs["logits"], labels)
+        loss = F.cross_entropy(outputs["logits"], labels, label_smoothing=label_smoothing)
         return loss, {"loss": float(loss.detach().cpu()), "ce": float(loss.detach().cpu())}
 
     lambda_mask = float(cfg.get("lambda_mask", 0.0))
     lambda_consistency = float(cfg.get("lambda_consistency", 0.0))
     use_fused_ce = bool(cfg.get("use_fused_ce", False))
 
-    loss_g = F.cross_entropy(outputs["logits_g"], labels)
-    loss_p = F.cross_entropy(outputs["logits_p"], labels)
+    loss_g = F.cross_entropy(outputs["logits_g"], labels, label_smoothing=label_smoothing)
+    loss_p = F.cross_entropy(outputs["logits_p"], labels, label_smoothing=label_smoothing)
     total = loss_g + loss_p
     logs = {
         "loss_g": float(loss_g.detach().cpu()),
@@ -33,7 +34,7 @@ def compute_loss(outputs: dict[str, torch.Tensor], labels: torch.Tensor, cfg: di
     }
 
     if use_fused_ce:
-        loss_fused = F.cross_entropy(outputs["logits"], labels)
+        loss_fused = F.cross_entropy(outputs["logits"], labels, label_smoothing=label_smoothing)
         total = total + loss_fused
         logs["loss_fused"] = float(loss_fused.detach().cpu())
 

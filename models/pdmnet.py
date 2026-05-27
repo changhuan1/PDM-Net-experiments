@@ -17,6 +17,7 @@ class BaselineClassifier(nn.Module):
         backbone: str = "resnet18",
         pretrained: bool = True,
         attention: str | None = None,
+        dropout: float = 0.0,
     ) -> None:
         super().__init__()
         self.backbone = FeatureBackbone(backbone, pretrained)
@@ -30,11 +31,12 @@ class BaselineClassifier(nn.Module):
         else:
             raise ValueError(f"Unsupported attention: {attention}")
         self.pool = nn.AdaptiveAvgPool2d(1)
+        self.dropout = nn.Dropout(p=dropout) if dropout > 0 else nn.Identity()
         self.classifier = nn.Linear(channels, num_classes)
 
     def forward(self, x: torch.Tensor, labels: torch.Tensor | None = None) -> dict[str, torch.Tensor]:
         features = self.attention(self.backbone(x))
-        z = self.pool(features).flatten(1)
+        z = self.dropout(self.pool(features).flatten(1))
         logits = self.classifier(z)
         return {"logits": logits, "logits_g": logits, "features": features, "embedding": z}
 
@@ -46,17 +48,19 @@ class PrototypeClassifierBaseline(nn.Module):
         backbone: str = "resnet18",
         pretrained: bool = True,
         temperature: float = 0.1,
+        dropout: float = 0.0,
     ) -> None:
         super().__init__()
         self.backbone = FeatureBackbone(backbone, pretrained)
         channels = self.backbone.feature_dim
         self.pool = nn.AdaptiveAvgPool2d(1)
+        self.dropout = nn.Dropout(p=dropout) if dropout > 0 else nn.Identity()
         self.prototypes = nn.Parameter(torch.randn(num_classes, channels) * 0.02)
         self.temperature = temperature
 
     def forward(self, x: torch.Tensor, labels: torch.Tensor | None = None) -> dict[str, torch.Tensor]:
         features = self.backbone(x)
-        z = self.pool(features).flatten(1)
+        z = self.dropout(self.pool(features).flatten(1))
         logits = F.normalize(z, dim=1) @ F.normalize(self.prototypes, dim=1).t()
         logits = logits / self.temperature
         return {"logits": logits, "logits_p": logits, "features": features, "embedding": z}
@@ -75,6 +79,7 @@ class PDMNet(nn.Module):
         use_prototype_mask: bool = True,
         use_prototype_classifier: bool = True,
         class_agnostic_attention: bool = False,
+        dropout: float = 0.0,
     ) -> None:
         super().__init__()
         self.num_classes = num_classes
@@ -89,6 +94,7 @@ class PDMNet(nn.Module):
         self.backbone = FeatureBackbone(backbone, pretrained)
         channels = self.backbone.feature_dim
         self.pool = nn.AdaptiveAvgPool2d(1)
+        self.dropout = nn.Dropout(p=dropout) if dropout > 0 else nn.Identity()
         self.global_classifier = nn.Linear(channels, num_classes)
         self.prototypes = nn.Parameter(torch.randn(num_classes, channels) * 0.02)
         self.class_agnostic_mask = nn.Sequential(nn.Conv2d(channels, 1, kernel_size=1), nn.Sigmoid())
@@ -122,14 +128,14 @@ class PDMNet(nn.Module):
 
     def forward(self, x: torch.Tensor, labels: torch.Tensor | None = None) -> dict[str, torch.Tensor]:
         features = self.backbone(x)
-        z_g = self.pool(features).flatten(1)
+        z_g = self.dropout(self.pool(features).flatten(1))
         logits_g = self.global_classifier(z_g)
         masks = self.compute_masks(features)
 
         selected_mask = None
         if self.training and labels is not None and self.use_gt_mask_train:
             selected_mask = masks[torch.arange(x.shape[0], device=x.device), labels]
-            z_m = (features * selected_mask.unsqueeze(1)).mean(dim=(2, 3))
+            z_m = self.dropout((features * selected_mask.unsqueeze(1)).mean(dim=(2, 3)))
             logits_p = self._prototype_logits_from_shared_feature(z_m)
         else:
             logits_p = self._prototype_logits_from_class_masks(features, masks)
@@ -155,21 +161,27 @@ def create_model(model_name: str, num_classes: int, cfg: dict[str, Any]) -> nn.M
     backbone = cfg.get("backbone", "resnet18")
     pretrained = bool(cfg.get("pretrained", True))
     temperature = float(cfg.get("temperature", 0.1))
+    dropout = float(cfg.get("dropout", 0.0))
 
     if model_name == "resnet18":
-        return BaselineClassifier(num_classes, backbone="resnet18", pretrained=pretrained)
+        return BaselineClassifier(num_classes, backbone="resnet18", pretrained=pretrained, dropout=dropout)
+    if model_name == "resnet50":
+        return BaselineClassifier(num_classes, backbone="resnet50", pretrained=pretrained, dropout=dropout)
     if model_name in {"mobilenetv2", "mobilenet_v2"}:
-        return BaselineClassifier(num_classes, backbone="mobilenetv2", pretrained=pretrained)
+        return BaselineClassifier(num_classes, backbone="mobilenetv2", pretrained=pretrained, dropout=dropout)
     if model_name == "resnet18_se":
-        return BaselineClassifier(num_classes, backbone="resnet18", pretrained=pretrained, attention="se")
+        return BaselineClassifier(num_classes, backbone="resnet18", pretrained=pretrained, attention="se", dropout=dropout)
     if model_name == "resnet18_cbam":
-        return BaselineClassifier(num_classes, backbone="resnet18", pretrained=pretrained, attention="cbam")
+        return BaselineClassifier(num_classes, backbone="resnet18", pretrained=pretrained, attention="cbam", dropout=dropout)
+    if model_name == "resnet50_cbam":
+        return BaselineClassifier(num_classes, backbone="resnet50", pretrained=pretrained, attention="cbam", dropout=dropout)
     if model_name == "prototype":
         return PrototypeClassifierBaseline(
             num_classes,
             backbone=backbone,
             pretrained=pretrained,
             temperature=temperature,
+            dropout=dropout,
         )
     if model_name == "pdmnet":
         return PDMNet(
@@ -183,6 +195,7 @@ def create_model(model_name: str, num_classes: int, cfg: dict[str, Any]) -> nn.M
             use_prototype_mask=bool(cfg.get("use_prototype_mask", True)),
             use_prototype_classifier=bool(cfg.get("use_prototype_classifier", True)),
             class_agnostic_attention=bool(cfg.get("class_agnostic_attention", False)),
+            dropout=dropout,
         )
 
     raise ValueError(f"Unsupported model name: {model_name}")
