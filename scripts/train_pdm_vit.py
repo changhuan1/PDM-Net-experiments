@@ -46,6 +46,8 @@ class PDMViT(nn.Module):
         fusion_alpha: float = 0.7,
         mask_scale: float = 5.0,
         dropout: float = 0.2,
+        use_token_mask: bool = True,
+        use_prototype_branch: bool = True,
     ) -> None:
         super().__init__()
         self.encoder = AutoModel.from_pretrained(model_name_or_path)
@@ -54,6 +56,8 @@ class PDMViT(nn.Module):
         self.temperature = temperature
         self.fusion_alpha = fusion_alpha
         self.mask_scale = mask_scale
+        self.use_token_mask = use_token_mask
+        self.use_prototype_branch = use_prototype_branch
         self.dropout = nn.Dropout(dropout)
         self.classifier = nn.Linear(hidden_size, num_classes)
         self.prototypes = nn.Parameter(torch.randn(num_classes, hidden_size) * 0.02)
@@ -72,7 +76,10 @@ class PDMViT(nn.Module):
         local = F.normalize(patch_tokens, dim=-1)
         prototypes = F.normalize(self.prototypes, dim=-1)
         similarity = torch.einsum("bnh,kh->bkn", local, prototypes)
-        masks = torch.sigmoid(self.mask_scale * similarity)
+        if self.use_token_mask:
+            masks = torch.sigmoid(self.mask_scale * similarity)
+        else:
+            masks = torch.ones_like(similarity)
 
         if self.training and labels is not None:
             selected = masks[torch.arange(pixel_values.shape[0], device=pixel_values.device), labels]
@@ -86,7 +93,11 @@ class PDMViT(nn.Module):
             logits_p = (z_m * prototypes.unsqueeze(0)).sum(dim=-1) / self.temperature
             selected_mask = None
 
-        logits = logits_g + self.fusion_alpha * logits_p
+        if self.use_prototype_branch:
+            logits = logits_g + self.fusion_alpha * logits_p
+        else:
+            logits_p = torch.zeros_like(logits_g)
+            logits = logits_g
         return {"logits": logits, "logits_g": logits_g, "logits_p": logits_p, "masks": masks, "selected_mask": selected_mask}
 
 
@@ -110,6 +121,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--freeze-encoder", action="store_true")
+    parser.add_argument("--disable-token-mask", action="store_true", help="Ablation: replace prototype-guided masks with all-one masks.")
+    parser.add_argument("--disable-prototype-branch", action="store_true", help="Ablation: use only the global CLS classifier.")
     return parser.parse_args()
 
 
@@ -150,10 +163,12 @@ def symmetric_kl(logits_a: torch.Tensor, logits_b: torch.Tensor) -> torch.Tensor
 
 def compute_loss(outputs: dict[str, torch.Tensor], labels: torch.Tensor, args: argparse.Namespace) -> torch.Tensor:
     loss_g = F.cross_entropy(outputs["logits_g"], labels, label_smoothing=args.label_smoothing)
-    loss_p = F.cross_entropy(outputs["logits_p"], labels, label_smoothing=args.label_smoothing)
     loss_f = F.cross_entropy(outputs["logits"], labels, label_smoothing=args.label_smoothing)
-    loss = loss_g + loss_p + loss_f
-    if args.lambda_consistency > 0:
+    loss = loss_g + loss_f
+    if not args.disable_prototype_branch:
+        loss_p = F.cross_entropy(outputs["logits_p"], labels, label_smoothing=args.label_smoothing)
+        loss = loss + loss_p
+    if args.lambda_consistency > 0 and not args.disable_prototype_branch:
         loss = loss + args.lambda_consistency * symmetric_kl(outputs["logits_g"], outputs["logits_p"])
     selected_mask = outputs.get("selected_mask")
     if args.lambda_mask > 0 and selected_mask is not None:
@@ -219,6 +234,8 @@ def main() -> None:
         fusion_alpha=args.fusion_alpha,
         mask_scale=args.mask_scale,
         dropout=args.dropout,
+        use_token_mask=not args.disable_token_mask,
+        use_prototype_branch=not args.disable_prototype_branch,
     )
     if args.freeze_encoder:
         model.freeze_encoder()

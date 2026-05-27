@@ -87,3 +87,28 @@ python scripts/aggregate_results.py --outputs outputs --out outputs/summary.csv
 ## 6. Paper TODO
 
 After running all shots and baselines, copy the averaged metrics into `../Paper/pdmnet_en.tex` and `../Paper/pdmnet_zh.tex`, replacing every `TODO` entry.
+
+## PDM-ViT One-click Experiments
+
+The PRCV-ready PDM-ViT paper uses the prototype-guided ViT fine-tuning script:
+
+```bash
+cd /root/experiments
+bash scripts/run_pdmvit_full_experiment.sh
+```
+
+The runner trains PDM-ViT on full-data splits, optionally runs 50-shot experiments, runs ablations for the proposed token mask/prototype/consistency components, and writes:
+
+```text
+outputs/pdmvit_summary.csv
+outputs/pdmvit_summary_grouped.csv
+```
+
+Useful switches:
+
+```bash
+SEEDS="0" RUN_LOW_SHOT=0 RUN_ABLATION=0 bash scripts/run_pdmvit_full_experiment.sh
+MODEL=models_hf/vit-face-expression BATCH_SIZE=64 bash scripts/run_pdmvit_full_experiment.sh
+```
+
+Copy the averaged metrics from `outputs/pdmvit_summary_grouped.csv` into `../Paper/pdmvit_en.tex` and `../Paper/pdmvit_zh.tex`.
