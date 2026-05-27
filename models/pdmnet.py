@@ -10,6 +10,54 @@ from .attention import CBAMBlock, SEBlock
 from .backbones import FeatureBackbone
 
 
+class FERCNN(nn.Module):
+    def __init__(self, num_classes: int, dropout: float = 0.4) -> None:
+        super().__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(3, 64, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2),
+
+            nn.Conv2d(64, 128, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(128, 128, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2),
+
+            nn.Conv2d(128, 256, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(256),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(256, 256, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(256),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2),
+
+            nn.Conv2d(256, 512, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(512),
+            nn.ReLU(inplace=True),
+        )
+        self.pool = nn.AdaptiveAvgPool2d(1)
+        self.classifier = nn.Sequential(
+            nn.Dropout(p=dropout),
+            nn.Linear(512, 256),
+            nn.ReLU(inplace=True),
+            nn.Dropout(p=dropout),
+            nn.Linear(256, num_classes),
+        )
+
+    def forward(self, x: torch.Tensor, labels: torch.Tensor | None = None) -> dict[str, torch.Tensor]:
+        features = self.features(x)
+        embedding = self.pool(features).flatten(1)
+        logits = self.classifier(embedding)
+        return {"logits": logits, "logits_g": logits, "features": features, "embedding": embedding}
+
+
 class BaselineClassifier(nn.Module):
     def __init__(
         self,
@@ -163,6 +211,8 @@ def create_model(model_name: str, num_classes: int, cfg: dict[str, Any]) -> nn.M
     temperature = float(cfg.get("temperature", 0.1))
     dropout = float(cfg.get("dropout", 0.0))
 
+    if model_name in {"fer_cnn", "fercnn"}:
+        return FERCNN(num_classes=num_classes, dropout=dropout if dropout > 0 else 0.4)
     if model_name == "resnet18":
         return BaselineClassifier(num_classes, backbone="resnet18", pretrained=pretrained, dropout=dropout)
     if model_name == "resnet50":

@@ -1,0 +1,27 @@
+dataset:
+  image_size: 48
+  num_workers: 8
+  class_names: []
+
+training:
+  epochs: 120
+  batch_size: 256
+  learning_rate: 0.001
+  weight_decay: 0.0005
+  optimizer: adamw
+  scheduler: cosine
+  seed: 0
+  amp: true
+  freeze_backbone: false
+
+model:
+  name: fer_cnn
+  pretrained: false
+  dropout: 0.45
+
+loss:
+  label_smoothing: 0.05
+
+output:
+  root: outputs
+  run_name: fer_cnn_full
