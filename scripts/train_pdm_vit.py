@@ -283,7 +283,7 @@ def main() -> None:
             torch.save({"model": model.state_dict(), "class_names": class_names, "args": vars(args)}, best_path)
 
     (output_dir / "history.json").write_text(json.dumps(history, indent=2), encoding="utf-8")
-    checkpoint = torch.load(best_path, map_location=device)
+    checkpoint = torch.load(best_path, map_location=device, weights_only=False)
     model.load_state_dict(checkpoint["model"])
     test_metrics = evaluate(model, test_loader, device)
     (output_dir / "test_metrics.json").write_text(json.dumps(test_metrics, indent=2), encoding="utf-8")
